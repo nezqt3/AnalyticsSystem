@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-json
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -lc 'cd backend && gofmt -w $(find . -name "*.go" -not -path "./data/*")'
+        language: system
+        pass_filenames: false
+      - id: go-test
+        name: go test
+        entry: bash -lc 'cd backend && go test ./...'
+        language: system
+        pass_filenames: false
+      - id: go-vet
+        name: go vet
+        entry: bash -lc 'cd backend && go vet ./...'
+        language: system
+        pass_filenames: false
+      - id: frontend-eslint
+        name: frontend eslint
+        entry: bash -lc 'cd frontend && npm run lint'
+        language: system
+        pass_filenames: false
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: bash -lc 'cd frontend && npm run typecheck'
+        language: system
+        pass_filenames: false
+      - id: frontend-format-check
+        name: frontend prettier check
+        entry: bash -lc 'cd frontend && npm run format:check'
+        language: system
+        pass_filenames: false
+      - id: frontend-test
+        name: frontend jest
+        entry: bash -lc 'cd frontend && npm run test -- --runInBand'
+        language: system
+        pass_filenames: false

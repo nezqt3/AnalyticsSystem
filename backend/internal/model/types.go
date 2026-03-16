@@ -1,7 +1,5 @@
 package model
 
-import "time"
-
 type Site struct {
 	ID     int64  `json:"id"`
 	Name   string `json:"name"`
@@ -62,12 +60,12 @@ type EventItem struct {
 }
 
 type PageStat struct {
-	Path           string `json:"path"`
-	Pageviews      int    `json:"pageviews"`
-	Clicks         int    `json:"clicks"`
-	FormSubmissions int   `json:"form_submissions"`
-	UniqueVisitors int    `json:"unique_visitors"`
-	LastSeen       string `json:"last_seen"`
+	Path            string `json:"path"`
+	Pageviews       int    `json:"pageviews"`
+	Clicks          int    `json:"clicks"`
+	FormSubmissions int    `json:"form_submissions"`
+	UniqueVisitors  int    `json:"unique_visitors"`
+	LastSeen        string `json:"last_seen"`
 }
 
 type ClickTarget struct {
@@ -85,15 +83,15 @@ type ScrollDepthPoint struct {
 }
 
 type PageAnalytics struct {
-	Path             string             `json:"path"`
-	Pageviews        int                `json:"pageviews"`
-	Clicks           int                `json:"clicks"`
-	FormSubmissions  int                `json:"form_submissions"`
-	UniqueVisitors   int                `json:"unique_visitors"`
-	AvgScrollDepth   float64            `json:"avg_scroll_depth"`
-	TopTargets       []ClickTarget      `json:"top_targets"`
-	ScrollDepths     []ScrollDepthPoint `json:"scroll_depths"`
-	LastInteractionAt string            `json:"last_interaction_at"`
+	Path              string             `json:"path"`
+	Pageviews         int                `json:"pageviews"`
+	Clicks            int                `json:"clicks"`
+	FormSubmissions   int                `json:"form_submissions"`
+	UniqueVisitors    int                `json:"unique_visitors"`
+	AvgScrollDepth    float64            `json:"avg_scroll_depth"`
+	TopTargets        []ClickTarget      `json:"top_targets"`
+	ScrollDepths      []ScrollDepthPoint `json:"scroll_depths"`
+	LastInteractionAt string             `json:"last_interaction_at"`
 }
 
 type Filters struct {
@@ -106,6 +104,6 @@ type Filters struct {
 }
 
 type StoredEvent struct {
-	CreatedAt time.Time
+	CreatedAt string
 	Meta      string
 }

@@ -1,71 +1,114 @@
-export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
+import type {
+  EventItem,
+  HeatmapPoint,
+  PageAnalytics,
+  PageStat,
+  RealtimeResponse,
+  TrafficSource,
+} from "./types/api";
+import { API_BASE_URL } from "./env";
 
-export type RealtimeResp = {
-  active_users: number;
-  series: { minute: string; count: number }[];
-};
+export const API_BASE = API_BASE_URL;
 
-export type TrafficSource = {
-  source: string;
-  count: number;
-};
+type QueryValue = string | number | undefined;
 
-export type HeatmapPoint = {
-  x_pct: number;
-  y_pct: number;
-  count: number;
-};
+function buildURL(path: string, query: Record<string, QueryValue>): string {
+  const search = new URLSearchParams();
 
-export type EventItem = {
-  created_at: string;
-  event_type: string;
-  path: string;
-  title: string;
-  meta: string;
-  ref_domain: string;
-  utm_source: string;
-  utm_medium: string;
-  utm_campaign: string;
-};
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === "") return;
+    search.set(key, String(value));
+  });
 
-export async function getRealtime(siteId: number): Promise<RealtimeResp> {
-  const res = await fetch(`${API_BASE}/api/realtime?site_id=${siteId}`);
-  if (!res.ok) throw new Error("realtime fetch failed");
-  return res.json();
+  const suffix = search.toString();
+  return `${API_BASE}${path}${suffix ? `?${suffix}` : ""}`;
 }
 
-export async function getTrafficSources(siteId: number, path: string, from: string, to: string): Promise<TrafficSource[]> {
-  const qs = new URLSearchParams({
-    site_id: String(siteId),
-    path,
+async function request<T>(
+  path: string,
+  query: Record<string, QueryValue>,
+): Promise<T> {
+  const response = await fetch(buildURL(path, query));
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+export function getRealtime(siteId: number): Promise<RealtimeResponse> {
+  return request<RealtimeResponse>("/api/realtime", { site_id: siteId });
+}
+
+export function getPages(
+  siteId: number,
+  from: string,
+  to: string,
+  limit = 200,
+): Promise<PageStat[]> {
+  return request<PageStat[]>("/api/pages", {
+    site_id: siteId,
     from,
-    to
+    to,
+    limit,
   });
-  const res = await fetch(`${API_BASE}/api/traffic-sources?${qs.toString()}`);
-  if (!res.ok) throw new Error("traffic fetch failed");
-  return res.json();
 }
 
-export async function getHeatmap(siteId: number, path: string, bucket: number): Promise<HeatmapPoint[]> {
-  const qs = new URLSearchParams({
-    site_id: String(siteId),
-    path,
-    bucket: String(bucket)
-  });
-  const res = await fetch(`${API_BASE}/api/heatmap?${qs.toString()}`);
-  if (!res.ok) throw new Error("heatmap fetch failed");
-  return res.json();
-}
-
-export async function getEvents(siteId: number, path: string, from: string, to: string, limit: number): Promise<EventItem[]> {
-  const qs = new URLSearchParams({
-    site_id: String(siteId),
+export function getTrafficSources(
+  siteId: number,
+  path: string,
+  from: string,
+  to: string,
+): Promise<TrafficSource[]> {
+  return request<TrafficSource[]>("/api/traffic-sources", {
+    site_id: siteId,
     path,
     from,
     to,
-    limit: String(limit)
   });
-  const res = await fetch(`${API_BASE}/api/events?${qs.toString()}`);
-  if (!res.ok) throw new Error("events fetch failed");
-  return res.json();
+}
+
+export function getHeatmap(
+  siteId: number,
+  path: string,
+  from: string,
+  to: string,
+  bucket: number,
+): Promise<HeatmapPoint[]> {
+  return request<HeatmapPoint[]>("/api/heatmap", {
+    site_id: siteId,
+    path,
+    from,
+    to,
+    bucket,
+  });
+}
+
+export function getEvents(
+  siteId: number,
+  path: string,
+  from: string,
+  to: string,
+  limit: number,
+): Promise<EventItem[]> {
+  return request<EventItem[]>("/api/events", {
+    site_id: siteId,
+    path,
+    from,
+    to,
+    limit,
+  });
+}
+
+export function getPageAnalytics(
+  siteId: number,
+  path: string,
+  from: string,
+  to: string,
+): Promise<PageAnalytics> {
+  return request<PageAnalytics>("/api/page-analytics", {
+    site_id: siteId,
+    path,
+    from,
+    to,
+  });
 }

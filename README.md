@@ -1,34 +1,49 @@
-# AnalyticsSystem (MVP)
+# AnalyticsSystem
 
-Минимальный старт для аналитической платформы (Google Analytics lite).
+Система аналитики поведения пользователей с встраиваемым JS-трекером, Go backend и React dashboard.
 
-## Что уже есть
-- Go backend: сбор событий, realtime, heatmaps, источники трафика.
-- JS трекер: pageview + клики.
-- TS frontend: простая панель.
+## Что теперь есть
+- Встраивание остаётся через `script src`: достаточно подключить `tracker.js` и передать `data-site` + `data-endpoint`.
+- Трекер собирает `pageview`, `click`, `scroll`, `form_submit` и корректно отслеживает SPA-навигацию.
+- Backend разбит на слои: `cmd`, `internal/app`, `internal/httpapi`, `internal/store`, `internal/model`, `internal/tracker`.
+- Dashboard показывает список страниц, realtime, heatmap, top click targets, глубину скролла, события и источники трафика.
+- Для проекта настроены `Makefile`, `ESLint`, `Prettier`, `pre-commit`, CI/CD и автоматические тесты для frontend и backend.
+
+## Структура
+- `backend/cmd/server` — точка входа backend.
+- `backend/internal/app` — инициализация приложения и фоновые maintenance-задачи.
+- `backend/internal/httpapi` — HTTP API и WebSocket.
+- `backend/internal/store/sqlstore` — SQL-слой, агрегации, retention, выборки аналитики.
+- `backend/internal/tracker` — встроенный JS-трекер.
+- `frontend/src/components` — UI-блоки dashboard.
+- `frontend/src/hooks` — загрузка данных и realtime.
+- `frontend/src/lib` — утилиты форматирования и разбора метаданных.
+- `frontend/src/types` — типы API.
+- `frontend/src/**/*.test.ts(x)` — Jest-тесты для UI и утилит.
+- `backend/internal/**/*_test.go` — тесты backend.
+- `.github/workflows` — CI/CD пайплайны.
+- `.pre-commit-config.yaml` — локальные pre-commit проверки.
+- `Makefile` — основные команды разработки.
 
 ## Быстрый старт
 
-### 1) База данных
-Локально по умолчанию используется SQLite (`./data/analytics.db`), схема применится автоматически.
-
-Если нужен Postgres локально:
-- выставь `DATABASE_URL`,
-- схема применится автоматически из `backend/db/schema.pg.sql`.
-
-### 2) Backend (локально)
-
+### Backend
 ```bash
 cd backend
-go run .
+go run ./cmd/server
 ```
 
-Опционально:
-- `DATABASE_URL` для Postgres
-- `SQLITE_PATH` для SQLite (по умолчанию `./data/analytics.db`)
+Переменные окружения:
+- `PORT` — порт backend, по умолчанию `8080`
+- `DATABASE_URL` — подключение к Postgres
+- `SQLITE_PATH` — путь к SQLite, по умолчанию `./data/analytics.db`
+- `RAW_RETENTION_DAYS` — хранение сырых событий, по умолчанию `30`
+- `AGG_RETENTION_MONTHS` — хранение агрегатов, по умолчанию `12`
+- `HEATMAP_BUCKET_PCT` — размер ячейки heatmap, по умолчанию `5`
+- `EVENTS_LIMIT` — дефолтный лимит событий, по умолчанию `200`
 
-### 3) Tracker
-Подключи на сайт:
+### Tracker
+Подключение на сайт:
 
 ```html
 <script
@@ -38,21 +53,129 @@ go run .
 ></script>
 ```
 
-### 4) Frontend
-
+### Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Переменные окружения фронта:
-- `VITE_API_BASE` (по умолчанию `http://localhost:8080`)
-- `VITE_SITE_ID` (по умолчанию `1`)
+## Makefile
+Основные команды:
+
+```bash
+make install
+make install-pre-commit
+make dev-backend
+make dev-frontend
+make lint
+make typecheck
+make test
+make test-coverage
+make build
+make ci
+```
+
+## Тесты
+### Frontend
+Используется `Jest` + `Testing Library`.
+
+Команды:
+
+```bash
+cd frontend
+npm run test
+npm run test:watch
+npm run test:coverage
+```
+
+Покрываются:
+- рендеринг ключевых UI-блоков
+- поведение dashboard при загрузке данных
+- разбор и отображение метаданных событий
+
+### Backend
+Используются стандартные Go tests c SQLite test database.
+
+Команды:
+
+```bash
+cd backend
+go test ./...
+go test ./... -coverprofile=coverage.out
+go vet ./...
+```
+
+Покрываются:
+- парсинг входящих событий
+- SQL store и агрегации по страницам
+- HTTP handlers для ingest и аналитики
+
+## Pre-commit
+Установка хуков:
+
+```bash
+pre-commit install
+```
+
+Или через Makefile:
+
+```bash
+make install-pre-commit
+```
+
+Что проверяется перед коммитом:
+- базовые проверки структуры файлов
+- `gofmt`
+- `go test ./...`
+- `go vet ./...`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run format:check`
+- `npm run test -- --runInBand`
+
+## Frontend scripts
+```bash
+cd frontend
+npm run lint
+npm run lint:fix
+npm run typecheck
+npm run format
+npm run format:check
+npm run test
+npm run test:coverage
+npm run build
+```
+
+## API
+- `GET /api/pages` — список страниц с просмотрами, кликами и посетителями.
+- `GET /api/page-analytics` — детальная аналитика по одной странице.
+- `GET /api/realtime` — realtime за последние 5 минут.
+- `GET /api/heatmap` — тепловая карта кликов.
+- `GET /api/traffic-sources` — источники трафика.
+- `GET /api/events` — последние события.
+- `POST /collect` — приём батчей событий от трекера.
+
+## CI/CD
+### CI
+Workflow `/Users/denisalekseenko/Documents/Сайты/AnalyticsSystem/.github/workflows/ci.yml` запускает:
+- backend format check
+- backend `go vet`
+- backend tests
+- backend build
+- frontend prettier check
+- frontend eslint
+- frontend typecheck
+- frontend jest
+- frontend build
+
+### CD
+Workflow `/Users/denisalekseenko/Documents/Сайты/AnalyticsSystem/.github/workflows/cd.yml` на `main`:
+- собирает Docker image backend
+- собирает Docker image frontend
+- пушит их в `ghcr.io`
 
 ## Docker
-Запуск с Postgres:
-
 ```bash
 docker compose up --build
 ```
@@ -61,41 +184,3 @@ docker compose up --build
 - backend: `http://localhost:8080`
 - frontend: `http://localhost:5173`
 - postgres: `localhost:5432`
-
-## Следующие шаги (рекомендуемые)
-- Авторизация и мультисайтовость.
-- Нормализация источников (utm, referrer, direct).
-- Очистка и агрегация событий (retention).
-- Хранилище для heatmap по страницам и размерам экрана.
-- Очередь и батчинг для событий.
-
-## Авто-агрегации и retention
-Backend сам:
-- создаёт месячные партиции `events_YYYY_MM` (на 3 месяца вперёд),
-- пересчитывает дневные агрегаты за последние 2 дня,
-- удаляет старые сырые события и старые агрегаты.
-
-Переменные окружения:
-- `RAW_RETENTION_DAYS` (по умолчанию 30)
-- `AGG_RETENTION_MONTHS` (по умолчанию 12)
-
-## Нормализация источников и фильтры
-Трекер отправляет `utm_source`, `utm_medium`, `utm_campaign`, `entry_url`.
-Backend нормализует источники:
-- приоритет `utm_source`,
-- затем домен реферера,
-- иначе `direct`.
-
-Фильтры в API `/api/traffic-sources`:
-- `path` (опционально),
-- `from` и `to` (YYYY-MM-DD).
-
-## Realtime WebSocket и батчинг
-- Endpoint: `ws://<host>/ws/realtime?site_id=1`
-- При недоступности WS фронт делает polling `/api/realtime`.
-- Трекер отправляет события пачками (до 20 или раз в 5 сек).
-
-## Heatmap (улучшенная)
-- API `/api/heatmap` теперь возвращает проценты по экрану (`x_pct`, `y_pct`).
-- Параметр `bucket` (1-25) задаёт размер ячейки в процентах.
-- Дефолт можно задать через `HEATMAP_BUCKET_PCT` (по умолчанию 5).
