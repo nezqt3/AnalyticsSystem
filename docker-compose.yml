@@ -13,10 +13,15 @@ services:
   backend:
     build:
       context: ./backend
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgres://analytics:analytics@db:5432/analytics?sslmode=disable
       RAW_RETENTION_DAYS: 30
       AGG_RETENTION_MONTHS: 12
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-long-random-secret}
     depends_on:
       - db
     ports:

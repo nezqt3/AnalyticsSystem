@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"analytics-backend/internal/auth"
 	"analytics-backend/internal/config"
 	"analytics-backend/internal/model"
 	"analytics-backend/internal/store/sqlstore"
@@ -23,6 +24,9 @@ func newTestHandler(t *testing.T) *Handler {
 		AggRetentionMonths: 12,
 		HeatmapBucketPct:   5,
 		EventsLimit:        200,
+		AdminEmail:         "admin@example.com",
+		AdminPassword:      "super-secret",
+		SessionSecret:      "test-session-secret",
 	})
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -31,14 +35,21 @@ func newTestHandler(t *testing.T) *Handler {
 		_ = store.Close()
 	})
 
-	return NewHandler(config.Config{HeatmapBucketPct: 5, EventsLimit: 200}, store)
+	return NewHandler(config.Config{
+		HeatmapBucketPct: 5,
+		EventsLimit:      200,
+		AdminEmail:       "admin@example.com",
+		AdminPassword:    "super-secret",
+		SessionSecret:    "test-session-secret",
+	}, store)
 }
 
-func createSite(t *testing.T, handler *Handler) model.Site {
+func createSite(t *testing.T, handler *Handler, cookie *http.Cookie) model.Site {
 	t.Helper()
 
 	body, _ := json.Marshal(model.Site{Name: "Main", Domain: "example.com"})
 	request := httptest.NewRequest(http.MethodPost, "/api/sites", bytes.NewReader(body))
+	request.AddCookie(cookie)
 	recorder := httptest.NewRecorder()
 
 	handler.Routes().ServeHTTP(recorder, request)
@@ -51,6 +62,28 @@ func createSite(t *testing.T, handler *Handler) model.Site {
 		t.Fatalf("decode site: %v", err)
 	}
 	return site
+}
+
+func loginCookie(t *testing.T, handler *Handler) *http.Cookie {
+	t.Helper()
+
+	body, _ := json.Marshal(model.LoginRequest{Email: "admin@example.com", Password: "super-secret"})
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handler.Routes().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("login failed with status %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	response := recorder.Result()
+	for _, cookie := range response.Cookies() {
+		if cookie.Name == auth.SessionCookieName {
+			return cookie
+		}
+	}
+	t.Fatal("auth cookie not found")
+	return nil
 }
 
 func TestHandleCollectRejectsInvalidEvent(t *testing.T) {
@@ -66,9 +99,22 @@ func TestHandleCollectRejectsInvalidEvent(t *testing.T) {
 	}
 }
 
+func TestAuthRequiredForProtectedRoutes(t *testing.T) {
+	handler := newTestHandler(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/pages?site_id=1", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.Routes().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", recorder.Code)
+	}
+}
+
 func TestHandleCollectAndPageAnalyticsFlow(t *testing.T) {
 	handler := newTestHandler(t)
-	site := createSite(t, handler)
+	cookie := loginCookie(t, handler)
+	site := createSite(t, handler, cookie)
 
 	payload := []model.CollectEvent{
 		{
@@ -105,6 +151,7 @@ func TestHandleCollectAndPageAnalyticsFlow(t *testing.T) {
 	}
 
 	analyticsRequest := httptest.NewRequest(http.MethodGet, "/api/page-analytics?site_id=1&path=/features&from=2020-01-01&to=2099-01-01", nil)
+	analyticsRequest.AddCookie(cookie)
 	analyticsRecorder := httptest.NewRecorder()
 
 	handler.Routes().ServeHTTP(analyticsRecorder, analyticsRequest)

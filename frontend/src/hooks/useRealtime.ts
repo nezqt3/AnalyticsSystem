@@ -8,11 +8,17 @@ type RealtimeState = {
   error: string;
 };
 
-export function useRealtime(siteId: number): RealtimeState {
+export function useRealtime(siteId: number, enabled: boolean): RealtimeState {
   const [realtime, setRealtime] = useState<RealtimeResponse | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!enabled) {
+      setRealtime(null);
+      setError("");
+      return;
+    }
+
     let active = true;
     let socket: WebSocket | null = null;
     let pollTimer: number | null = null;
@@ -68,7 +74,7 @@ export function useRealtime(siteId: number): RealtimeState {
       }
       socket?.close();
     };
-  }, [siteId]);
+  }, [siteId, enabled]);
 
   return { realtime, error };
 }

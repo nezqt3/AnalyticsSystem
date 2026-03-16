@@ -3,16 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getEvents,
   getHeatmap,
+  getOverview,
   getPageAnalytics,
   getPages,
+  getRecentVisits,
+  getTimeline,
   getTrafficSources,
 } from "../api";
 import type {
   EventItem,
   HeatmapPoint,
+  OverviewMetrics,
   PageAnalytics,
   PageStat,
+  TimelinePoint,
   TrafficSource,
+  VisitEntry,
 } from "../types/api";
 
 type UseDashboardDataArgs = {
@@ -21,10 +27,14 @@ type UseDashboardDataArgs = {
   from: string;
   to: string;
   bucket: number;
+  enabled: boolean;
 };
 
 type DashboardState = {
   pages: PageStat[];
+  overview: OverviewMetrics | null;
+  timeline: TimelinePoint[];
+  visits: VisitEntry[];
   trafficSources: TrafficSource[];
   heatmap: HeatmapPoint[];
   events: EventItem[];
@@ -35,13 +45,25 @@ type DashboardState = {
 
 const EMPTY_STATE: DashboardState = {
   pages: [],
+  overview: null,
+  timeline: [],
+  visits: [],
   trafficSources: [],
   heatmap: [],
   events: [],
   pageAnalytics: null,
-  loading: true,
+  loading: false,
   error: "",
 };
+
+function resolveInterval(from: string, to: string): string {
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  const days = Math.ceil(
+    (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  return days <= 2 ? "hour" : "day";
+}
 
 export function useDashboardData({
   siteId,
@@ -49,15 +71,17 @@ export function useDashboardData({
   from,
   to,
   bucket,
+  enabled,
 }: UseDashboardDataArgs): DashboardState {
   const [state, setState] = useState<DashboardState>(EMPTY_STATE);
-
-  const shouldLoadPageDetails = useMemo(
-    () => selectedPath.trim().length > 0,
-    [selectedPath],
-  );
+  const interval = useMemo(() => resolveInterval(from, to), [from, to]);
 
   useEffect(() => {
+    if (!enabled) {
+      setState(EMPTY_STATE);
+      return;
+    }
+
     let active = true;
 
     async function load() {
@@ -65,23 +89,41 @@ export function useDashboardData({
 
       try {
         const pages = await getPages(siteId, from, to);
-        const nextPath = shouldLoadPageDetails
-          ? selectedPath
-          : (pages[0]?.path ?? "");
+        const nextPath = selectedPath || pages[0]?.path || "";
 
-        const [trafficSources, heatmap, events, pageAnalytics] = nextPath
-          ? await Promise.all([
-              getTrafficSources(siteId, nextPath, from, to),
-              getHeatmap(siteId, nextPath, from, to, bucket),
-              getEvents(siteId, nextPath, from, to, 150),
-              getPageAnalytics(siteId, nextPath, from, to),
-            ])
-          : [[], [], [], null];
+        const [
+          overview,
+          timeline,
+          visits,
+          trafficSources,
+          heatmap,
+          events,
+          pageAnalytics,
+        ] = await Promise.all([
+          getOverview(siteId, from, to),
+          getTimeline(siteId, nextPath, from, to, interval),
+          getRecentVisits(siteId, nextPath, from, to, 25),
+          nextPath
+            ? getTrafficSources(siteId, nextPath, from, to)
+            : Promise.resolve([]),
+          nextPath
+            ? getHeatmap(siteId, nextPath, from, to, bucket)
+            : Promise.resolve([]),
+          nextPath
+            ? getEvents(siteId, nextPath, from, to, 150)
+            : Promise.resolve([]),
+          nextPath
+            ? getPageAnalytics(siteId, nextPath, from, to)
+            : Promise.resolve(null),
+        ]);
 
         if (!active) return;
 
         setState({
           pages,
+          overview,
+          timeline,
+          visits,
           trafficSources,
           heatmap,
           events,
@@ -91,7 +133,6 @@ export function useDashboardData({
         });
       } catch (error) {
         if (!active) return;
-
         setState((current) => ({
           ...current,
           loading: false,
@@ -110,7 +151,7 @@ export function useDashboardData({
       active = false;
       window.clearInterval(timer);
     };
-  }, [siteId, selectedPath, from, to, bucket, shouldLoadPageDetails]);
+  }, [siteId, selectedPath, from, to, bucket, enabled, interval]);
 
   return state;
 }

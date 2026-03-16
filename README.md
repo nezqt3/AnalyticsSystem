@@ -1,33 +1,51 @@
 # AnalyticsSystem
 
-Система аналитики поведения пользователей с встраиваемым JS-трекером, Go backend и React dashboard.
+Система аналитики поведения пользователей с встраиваемым JS-трекером, защищённым admin dashboard, Go backend и React frontend.
 
-## Что теперь есть
+## Что теперь умеет система
 - Встраивание остаётся через `script src`: достаточно подключить `tracker.js` и передать `data-site` + `data-endpoint`.
-- Трекер собирает `pageview`, `click`, `scroll`, `form_submit` и корректно отслеживает SPA-навигацию.
-- Backend разбит на слои: `cmd`, `internal/app`, `internal/httpapi`, `internal/store`, `internal/model`, `internal/tracker`.
-- Dashboard показывает список страниц, realtime, heatmap, top click targets, глубину скролла, события и источники трафика.
-- Для проекта настроены `Makefile`, `ESLint`, `Prettier`, `pre-commit`, CI/CD и автоматические тесты для frontend и backend.
+- Трекер собирает `pageview`, `click`, `scroll`, `form_submit` и отслеживает SPA-навигацию.
+- Dashboard показывает:
+  - сводные KPI по просмотрам, кликам и посетителям,
+  - график динамики входов по времени,
+  - график входов по страницам,
+  - последние входы пользователей: когда и на какую страницу зашли,
+  - realtime-активность,
+  - heatmap,
+  - top click targets,
+  - глубину скролла,
+  - таблицу сырых событий.
+- Все API dashboard защищены авторизацией одного admin-аккаунта через `env`.
+- Для проекта настроены `Makefile`, `ESLint`, `Prettier`, `pre-commit`, CI/CD и тесты для frontend и backend.
+
+## Admin auth
+Используется один admin-аккаунт, данные задаются через переменные окружения:
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+- `SESSION_SECRET`
+
+Пример есть в `/Users/denisalekseenko/Documents/Сайты/AnalyticsSystem/.env.example`.
 
 ## Структура
 - `backend/cmd/server` — точка входа backend.
-- `backend/internal/app` — инициализация приложения и фоновые maintenance-задачи.
-- `backend/internal/httpapi` — HTTP API и WebSocket.
-- `backend/internal/store/sqlstore` — SQL-слой, агрегации, retention, выборки аналитики.
+- `backend/internal/app` — инициализация приложения и maintenance-задачи.
+- `backend/internal/auth` — логика admin-сессий.
+- `backend/internal/httpapi` — HTTP API, auth middleware, WebSocket.
+- `backend/internal/store/sqlstore` — SQL-слой, агрегации и выборки аналитики.
 - `backend/internal/tracker` — встроенный JS-трекер.
-- `frontend/src/components` — UI-блоки dashboard.
-- `frontend/src/hooks` — загрузка данных и realtime.
+- `frontend/src/components` — UI-компоненты dashboard.
+- `frontend/src/hooks` — auth, realtime и загрузка аналитики.
 - `frontend/src/lib` — утилиты форматирования и разбора метаданных.
 - `frontend/src/types` — типы API.
-- `frontend/src/**/*.test.ts(x)` — Jest-тесты для UI и утилит.
+- `frontend/src/**/*.test.ts(x)` — Jest-тесты frontend.
 - `backend/internal/**/*_test.go` — тесты backend.
 - `.github/workflows` — CI/CD пайплайны.
-- `.pre-commit-config.yaml` — локальные pre-commit проверки.
+- `.pre-commit-config.yaml` — локальные проверки перед коммитом.
 - `Makefile` — основные команды разработки.
 
 ## Быстрый старт
 
-### Backend
+### 1. Backend
 ```bash
 cd backend
 go run ./cmd/server
@@ -41,8 +59,11 @@ go run ./cmd/server
 - `AGG_RETENTION_MONTHS` — хранение агрегатов, по умолчанию `12`
 - `HEATMAP_BUCKET_PCT` — размер ячейки heatmap, по умолчанию `5`
 - `EVENTS_LIMIT` — дефолтный лимит событий, по умолчанию `200`
+- `ADMIN_EMAIL` — email администратора
+- `ADMIN_PASSWORD` — пароль администратора
+- `SESSION_SECRET` — секрет для подписи admin-сессии
 
-### Tracker
+### 2. Tracker
 Подключение на сайт:
 
 ```html
@@ -53,7 +74,7 @@ go run ./cmd/server
 ></script>
 ```
 
-### Frontend
+### 3. Frontend
 ```bash
 cd frontend
 npm install
@@ -89,13 +110,8 @@ npm run test:watch
 npm run test:coverage
 ```
 
-Покрываются:
-- рендеринг ключевых UI-блоков
-- поведение dashboard при загрузке данных
-- разбор и отображение метаданных событий
-
 ### Backend
-Используются стандартные Go tests c SQLite test database.
+Используются Go unit/integration tests с SQLite test database.
 
 Команды:
 
@@ -106,10 +122,20 @@ go test ./... -coverprofile=coverage.out
 go vet ./...
 ```
 
-Покрываются:
-- парсинг входящих событий
-- SQL store и агрегации по страницам
-- HTTP handlers для ingest и аналитики
+## API для dashboard
+- `POST /api/auth/login` — вход администратора.
+- `POST /api/auth/logout` — выход.
+- `GET /api/auth/me` — текущий admin.
+- `GET /api/overview` — сводные метрики.
+- `GET /api/timeline` — входы по времени.
+- `GET /api/visits` — последние входы пользователей по страницам.
+- `GET /api/pages` — список страниц с просмотрами, кликами и посетителями.
+- `GET /api/page-analytics` — детальная аналитика по одной странице.
+- `GET /api/realtime` — realtime за последние 5 минут.
+- `GET /api/heatmap` — тепловая карта кликов.
+- `GET /api/traffic-sources` — источники трафика.
+- `GET /api/events` — последние события.
+- `POST /collect` — приём батчей событий от трекера.
 
 ## Pre-commit
 Установка хуков:
@@ -133,28 +159,6 @@ make install-pre-commit
 - `npm run typecheck`
 - `npm run format:check`
 - `npm run test -- --runInBand`
-
-## Frontend scripts
-```bash
-cd frontend
-npm run lint
-npm run lint:fix
-npm run typecheck
-npm run format
-npm run format:check
-npm run test
-npm run test:coverage
-npm run build
-```
-
-## API
-- `GET /api/pages` — список страниц с просмотрами, кликами и посетителями.
-- `GET /api/page-analytics` — детальная аналитика по одной странице.
-- `GET /api/realtime` — realtime за последние 5 минут.
-- `GET /api/heatmap` — тепловая карта кликов.
-- `GET /api/traffic-sources` — источники трафика.
-- `GET /api/events` — последние события.
-- `POST /collect` — приём батчей событий от трекера.
 
 ## CI/CD
 ### CI

@@ -65,3 +65,27 @@ export type PageAnalytics = {
   scroll_depths: ScrollDepthPoint[];
   last_interaction_at: string;
 };
+
+export type OverviewMetrics = {
+  pageviews: number;
+  clicks: number;
+  unique_visitors: number;
+  top_page: string;
+};
+
+export type TimelinePoint = {
+  label: string;
+  count: number;
+};
+
+export type VisitEntry = {
+  created_at: string;
+  path: string;
+  title: string;
+  source: string;
+  session_id: string;
+};
+
+export type AuthUser = {
+  email: string;
+};

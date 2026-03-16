@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -39,6 +40,7 @@ type clickMeta struct {
 
 func Open(ctx context.Context, cfg config.Config) (*Store, error) {
 	if cfg.DatabaseURL != "" {
+		log.Printf("database: using PostgreSQL via DATABASE_URL")
 		db, err := sql.Open("pgx", cfg.DatabaseURL)
 		if err != nil {
 			return nil, err
@@ -60,6 +62,7 @@ func Open(ctx context.Context, cfg config.Config) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath), 0o755); err != nil {
 		return nil, err
 	}
+	log.Printf("database: using SQLite at %s", cfg.SQLitePath)
 
 	db, err := sql.Open("sqlite", cfg.SQLitePath)
 	if err != nil {
@@ -448,6 +451,176 @@ func (s *Store) FetchPages(ctx context.Context, filters model.Filters) ([]model.
 	return items, rows.Err()
 }
 
+func (s *Store) FetchOverview(ctx context.Context, filters model.Filters) (model.OverviewMetrics, error) {
+	var overview model.OverviewMetrics
+
+	if s.isSQLite {
+		if err := s.db.QueryRowContext(ctx, `
+			select
+				coalesce(sum(case when event_type = 'pageview' then 1 else 0 end), 0) as pageviews,
+				coalesce(sum(case when event_type = 'click' then 1 else 0 end), 0) as clicks,
+				coalesce(count(distinct case when session_id is not null then session_id end), 0) as unique_visitors
+			from events
+			where site_id = ?
+			  and (? = '' or created_at >= datetime(?))
+			  and (? = '' or created_at < datetime(?, '+1 day'))
+		`, filters.SiteID, filters.From, filters.From, filters.To, filters.To).Scan(&overview.Pageviews, &overview.Clicks, &overview.UniqueVisitors); err != nil {
+			return model.OverviewMetrics{}, err
+		}
+
+		if err := s.db.QueryRowContext(ctx, `
+			select coalesce(path, '')
+			from events
+			where site_id = ? and event_type = 'pageview'
+			  and (? = '' or created_at >= datetime(?))
+			  and (? = '' or created_at < datetime(?, '+1 day'))
+			group by path
+			order by count(*) desc, path asc
+			limit 1
+		`, filters.SiteID, filters.From, filters.From, filters.To, filters.To).Scan(&overview.TopPage); err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return model.OverviewMetrics{}, err
+		}
+		return overview, nil
+	}
+
+	if err := s.db.QueryRowContext(ctx, `
+		select
+			coalesce(sum(case when event_type = 'pageview' then 1 else 0 end), 0) as pageviews,
+			coalesce(sum(case when event_type = 'click' then 1 else 0 end), 0) as clicks,
+			coalesce(count(distinct session_id) filter (where session_id is not null), 0) as unique_visitors
+		from events
+		where site_id = $1
+		  and ($2 = '' or created_at >= $2::date)
+		  and ($3 = '' or created_at < ($3::date + interval '1 day'))
+	`, filters.SiteID, filters.From, filters.To).Scan(&overview.Pageviews, &overview.Clicks, &overview.UniqueVisitors); err != nil {
+		return model.OverviewMetrics{}, err
+	}
+
+	if err := s.db.QueryRowContext(ctx, `
+		select coalesce(path, '')
+		from events
+		where site_id = $1 and event_type = 'pageview'
+		  and ($2 = '' or created_at >= $2::date)
+		  and ($3 = '' or created_at < ($3::date + interval '1 day'))
+		group by path
+		order by count(*) desc, path asc
+		limit 1
+	`, filters.SiteID, filters.From, filters.To).Scan(&overview.TopPage); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return model.OverviewMetrics{}, err
+	}
+
+	return overview, nil
+}
+
+func (s *Store) FetchTimeline(ctx context.Context, filters model.Filters) ([]model.TimelinePoint, error) {
+	interval := normalizeInterval(filters.Interval)
+	var rows *sql.Rows
+	var err error
+
+	if s.isSQLite {
+		format := "%Y-%m-%d"
+		if interval == "hour" {
+			format = "%Y-%m-%d %H:00"
+		}
+		rows, err = s.db.QueryContext(ctx, `
+			select strftime(?, created_at) as label, count(*) as count
+			from events
+			where site_id = ?
+			  and event_type = 'pageview'
+			  and (? = '' or path = ?)
+			  and (? = '' or created_at >= datetime(?))
+			  and (? = '' or created_at < datetime(?, '+1 day'))
+			group by 1
+			order by 1 asc
+		`, format, filters.SiteID, filters.Path, filters.Path, filters.From, filters.From, filters.To, filters.To)
+	} else {
+		groupExpr := "YYYY-MM-DD"
+		if interval == "hour" {
+			groupExpr = "YYYY-MM-DD HH24:00"
+		}
+		rows, err = s.db.QueryContext(ctx, `
+			select to_char(date_trunc($4, created_at), $5) as label, count(*) as count
+			from events
+			where site_id = $1
+			  and event_type = 'pageview'
+			  and ($2 = '' or path = $2)
+			  and ($3 = '' or created_at >= $3::date)
+			  and ($6 = '' or created_at < ($6::date + interval '1 day'))
+			group by 1
+			order by 1 asc
+		`, filters.SiteID, filters.Path, filters.From, interval, groupExpr, filters.To)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := make([]model.TimelinePoint, 0, 32)
+	for rows.Next() {
+		var point model.TimelinePoint
+		if err := rows.Scan(&point.Label, &point.Count); err != nil {
+			return nil, err
+		}
+		points = append(points, point)
+	}
+	return points, rows.Err()
+}
+
+func (s *Store) FetchRecentVisits(ctx context.Context, filters model.Filters) ([]model.VisitEntry, error) {
+	var rows *sql.Rows
+	var err error
+
+	if s.isSQLite {
+		rows, err = s.db.QueryContext(ctx, `
+			select
+				created_at,
+				path,
+				coalesce(title, ''),
+				coalesce(nullif(utm_source, ''), nullif(ref_domain, ''), nullif(source, ''), 'direct') as source,
+				coalesce(session_id, '')
+			from events
+			where site_id = ?
+			  and event_type = 'pageview'
+			  and (? = '' or path = ?)
+			  and (? = '' or created_at >= datetime(?))
+			  and (? = '' or created_at < datetime(?, '+1 day'))
+			order by created_at desc
+			limit ?
+		`, filters.SiteID, filters.Path, filters.Path, filters.From, filters.From, filters.To, filters.To, filters.Limit)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			select
+				to_char(created_at, 'YYYY-MM-DD HH24:MI:SS'),
+				path,
+				coalesce(title, ''),
+				coalesce(nullif(utm_source, ''), nullif(ref_domain, ''), nullif(source, ''), 'direct') as source,
+				coalesce(session_id, '')
+			from events
+			where site_id = $1
+			  and event_type = 'pageview'
+			  and ($2 = '' or path = $2)
+			  and ($3 = '' or created_at >= $3::date)
+			  and ($4 = '' or created_at < ($4::date + interval '1 day'))
+			order by created_at desc
+			limit $5
+		`, filters.SiteID, filters.Path, filters.From, filters.To, filters.Limit)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	visits := make([]model.VisitEntry, 0, filters.Limit)
+	for rows.Next() {
+		var visit model.VisitEntry
+		if err := rows.Scan(&visit.CreatedAt, &visit.Path, &visit.Title, &visit.Source, &visit.SessionID); err != nil {
+			return nil, err
+		}
+		visits = append(visits, visit)
+	}
+	return visits, rows.Err()
+}
+
 func (s *Store) FetchPageAnalytics(ctx context.Context, filters model.Filters) (model.PageAnalytics, error) {
 	analytics := model.PageAnalytics{Path: filters.Path}
 	if filters.Path == "" {
@@ -789,4 +962,11 @@ func max(a int, b int) int {
 		return a
 	}
 	return b
+}
+
+func normalizeInterval(value string) string {
+	if strings.TrimSpace(value) == "hour" {
+		return "hour"
+	}
+	return "day"
 }

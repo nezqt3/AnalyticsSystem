@@ -94,13 +94,43 @@ type PageAnalytics struct {
 	LastInteractionAt string             `json:"last_interaction_at"`
 }
 
+type OverviewMetrics struct {
+	Pageviews      int    `json:"pageviews"`
+	Clicks         int    `json:"clicks"`
+	UniqueVisitors int    `json:"unique_visitors"`
+	TopPage        string `json:"top_page"`
+}
+
+type TimelinePoint struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+type VisitEntry struct {
+	CreatedAt string `json:"created_at"`
+	Path      string `json:"path"`
+	Title     string `json:"title"`
+	Source    string `json:"source"`
+	SessionID string `json:"session_id"`
+}
+
+type AuthUser struct {
+	Email string `json:"email"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type Filters struct {
-	SiteID int64
-	Path   string
-	From   string
-	To     string
-	Limit  int
-	Bucket int
+	SiteID   int64
+	Path     string
+	From     string
+	To       string
+	Limit    int
+	Bucket   int
+	Interval string
 }
 
 type StoredEvent struct {
