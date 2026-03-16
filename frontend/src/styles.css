@@ -1,0 +1,210 @@
+:root {
+  font-family: "IBM Plex Sans", "Noto Sans", system-ui, sans-serif;
+  color: #0b0e14;
+  background: #f5f2eb;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.2px;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #e3ded2;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(10, 10, 10, 0.06);
+}
+
+.card h2 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.filters label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #5c5f66;
+}
+
+.filters input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e3ded2;
+  font-size: 14px;
+}
+
+.meta {
+  color: #5c5f66;
+}
+
+.error {
+  background: #ffe7e5;
+  color: #7a1a13;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.realtime-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+}
+
+.metric {
+  background: #f6f7fb;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.metric .label {
+  font-size: 12px;
+  color: #5c5f66;
+}
+
+.metric .value {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.series {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+}
+
+.series li {
+  display: grid;
+  grid-template-columns: 50px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.series .bar {
+  height: 8px;
+  background: linear-gradient(90deg, #ea5c2b, #f7b733);
+  border-radius: 999px;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0ede6;
+}
+
+.heatmap {
+  display: grid;
+  gap: 12px;
+}
+
+.heatmap-canvas {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(0,0,0,0.04) 1px, transparent 1px),
+    #fbf8f1;
+  background-size: 10% 10%;
+  border-radius: 12px;
+  border: 1px solid #e3ded2;
+  overflow: hidden;
+}
+
+.heatmap-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8a8f99;
+}
+
+.heat-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(234,92,43,0.9) 0%, rgba(234,92,43,0.05) 65%, rgba(234,92,43,0) 100%);
+  pointer-events: none;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #5c5f66;
+}
+
+.heatmap-gradient {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(234,92,43,0.1), rgba(234,92,43,0.9));
+}
+
+.events {
+  overflow: auto;
+}
+
+.events table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.events th,
+.events td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid #f0ede6;
+  white-space: nowrap;
+}
+
+.events .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 700px) {
+  .realtime-grid {
+    grid-template-columns: 1fr;
+  }
+}
