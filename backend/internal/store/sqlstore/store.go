@@ -125,6 +125,21 @@ func (s *Store) ListSites(ctx context.Context) ([]model.Site, error) {
 	return sites, rows.Err()
 }
 
+func (s *Store) EnsureDefaultSite(ctx context.Context) (model.Site, error) {
+	sites, err := s.ListSites(ctx)
+	if err != nil {
+		return model.Site{}, err
+	}
+	if len(sites) > 0 {
+		return sites[0], nil
+	}
+
+	return s.CreateSite(ctx, model.Site{
+		Name:   "Default site",
+		Domain: "*",
+	})
+}
+
 func (s *Store) InsertEvents(ctx context.Context, events []model.CollectEvent, ip string, userAgent string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

@@ -21,6 +21,10 @@ func New(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := store.EnsureDefaultSite(ctx); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 	return &App{Config: cfg, Store: store}, nil
 }
 

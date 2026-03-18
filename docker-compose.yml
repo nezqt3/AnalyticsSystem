@@ -8,7 +8,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "9001:5432"
 
   backend:
     build:
@@ -25,15 +25,20 @@ services:
     depends_on:
       - db
     ports:
-      - "8080:8080"
+      - "9081:8080"
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080}
+        VITE_SITE_ID: ${VITE_SITE_ID:-1}
     depends_on:
       - backend
     ports:
-      - "5173:80"
+      - "9090:80"
+    restart: unless-stopped
 
 volumes:
   pgdata:
